@@ -1,0 +1,92 @@
+        private void main()
+        {
+            //string text = System.IO.File.ReadAllText(@"C:\Users\Tim\Documents\JavaProjects\RenderingEngine\resources\vd_temp.obj");
+            string text = System.IO.File.ReadAllText(@"C:\temp\vd_temp.obj");
+            int count = 0;
+            int count2 = 0;
+            int count3 = 0;
+            
+            String[] lines = text.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
+
+            foreach (String line in lines)
+            {
+                if (line.Length > 1)
+                {
+                    if (line[0] == 'v' && line[1] == ' ')
+                    {
+                        ++count;
+                    }
+
+                    if (line[0] == 'v' && line[1] == 't')
+                    {
+                        ++count2;
+                    }
+
+                    if (line[0] == 'f' && line[1] == ' ')
+                    {
+                        ++count3;
+                    }
+                }
+            }
+
+            string[] verts = new string[count];
+            string[] uvs = new string[count2];
+            int[][] tris = new int[count3][];
+
+            count = 0;
+            count2 = 0;
+            count3 = 0;
+
+            foreach (String line in lines)
+            {
+                if (line.Length > 1)
+                {
+                    if (line[0] == 'v' && line[1] == ' ')
+                    {
+                        verts[count] = line.Remove(0, 2).Replace(' ', ',') + ",1,";
+                        ++count;
+                    }
+
+                    if (line[0] == 'v' && line[1] == 't')
+                    {
+                        uvs[count2] = line.Remove(0, 3).Replace(' ', ',') + ",";
+                        ++count2;
+                    }
+
+                    if (line[0] == 'f' && line[1] == ' ')
+                    {
+                        tris[count3] = removeNormals(line.Remove(0, 2).Replace(' ', '/'));
+                        ++count3;
+                    }
+                }
+            }
+            string final = "";
+
+            for (int i = 0; i < count3; i++)
+            {
+                for (int j = 0; j < 6; j++)
+                {
+                    if (j % 2 == 0)
+                    {
+                        final += verts[tris[i][j] - 1];
+                    }
+                    else
+                    {
+                        final += uvs[tris[i][j] - 1];
+                    }
+                }
+                final += "\n";
+            }
+            string[] output = final.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
+
+            //System.IO.File.WriteAllLines(@"C:\Users\Tim\Documents\JavaProjects\RenderingEngine\resources\vd_temp.txt", output);
+            System.IO.File.WriteAllLines(@"C:\temp\vd_temp.txt", output);
+        }
+
+        private static int[] removeNormals(string s)
+        {
+            string[] indices = s.Split(new[] { '/' }, StringSplitOptions.None);
+            int[] indicesR = new int[] { Convert.ToInt32(indices[0]), Convert.ToInt32(indices[1]), Convert.ToInt32(indices[3]), Convert.ToInt32(indices[4]), Convert.ToInt32(indices[6]), Convert.ToInt32(indices[7]) };
+
+            return indicesR;
+        }
