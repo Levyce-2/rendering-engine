@@ -1,16 +1,25 @@
-package CameraTest;
+package BasicShading;
 
+import javax.imageio.ImageIO;
 import javax.swing.*;
 import java.awt.*;
-import java.util.ArrayList;
 import java.awt.image.BufferedImage;
+import java.io.File;
+import java.io.IOException;
+import java.util.ArrayList;
 
-public class Renderer {
-    public static void main(String[] args) {
+public class RendererShd
+{
+    public static void main(String[] args)
+    {
         JFrame frame = new JFrame();
         frame.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
         Container pane = frame.getContentPane();
         pane.setLayout(new BorderLayout());
+
+        JButton changeView = new JButton("view");
+        changeView.setSize(23, 23);
+        pane.add(changeView);
 
         JSlider horizontalSlider = new JSlider(-180, 180, -90);
         pane.add(horizontalSlider, BorderLayout.SOUTH);
@@ -31,8 +40,21 @@ public class Renderer {
             public void paintComponent(Graphics g)
             {
                 Graphics2D g2 = (Graphics2D) g;
-                g2.setColor(Color.GRAY);
+                BufferedImage img = new BufferedImage(getWidth(), getHeight(), BufferedImage.TYPE_INT_ARGB);
+                //g2.setColor(Color.GRAY);
+
+                for (int i = 1; i < getWidth(); ++i)
+                {
+                    for (int k = 1; k < getHeight(); ++k)
+                    {
+                        img.setRGB(i, k, new Color((int)(144f/getHeight()*(getHeight()-k)), (int)(144f/getHeight()*(getHeight()-k)), (int)(144f/getHeight()*(getHeight()-k))).getRGB());
+                    }
+                }
+
                 g2.fillRect(0, 0, getWidth(), getHeight());
+
+
+                // transformation matrices
 
                 double axisX = Math.toRadians(horizontalSlider.getValue());
                 Matrix4 rotationX = new Matrix4(new double[] {
@@ -70,12 +92,23 @@ public class Renderer {
                 double fovAngle = Math.toRadians(177 + (FoVSlider.getValue() * 0.01f));
                 double fov = Math.tan(fovAngle / 2) * 170;
 
-                Matrix4 transform =  rotationX
+                Matrix4 transform = rotationX
                         .multiply(rotationY)
                         .multiply(rotationZ)
-                        .multiply(finalize);
+                        .multiply(finalize)
+                        ;
 
-                BufferedImage img = new BufferedImage(getWidth(), getHeight(), BufferedImage.TYPE_INT_ARGB);
+                BufferedImage img2 = new BufferedImage(1024, 1024, BufferedImage.TYPE_INT_ARGB);
+
+                try {
+                    img2 = ImageIO.read(new File("resources/test2.png"));
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+
+
+
+                // z-Buffer initialization
 
                 double[] zBuffer = new double[img.getWidth() * img.getHeight()];
 
@@ -83,11 +116,11 @@ public class Renderer {
                     zBuffer[q] = Double.NEGATIVE_INFINITY;
                 }
 
-                for (Triangle t : tris)
+                for (Triangle tr :tris)
                 {
-                    Vertex v1 = transform.transform(t.v1);
-                    Vertex v2 = transform.transform(t.v2);
-                    Vertex v3 = transform.transform(t.v3);
+                    Vertex v1 = transform.transform(tr.v1);
+                    Vertex v2 = transform.transform(tr.v2);
+                    Vertex v3 = transform.transform(tr.v3);
 
                     Vertex ab = new Vertex(v2.x - v1.x, v2.y - v1.y, v2.z - v1.z, v2.w - v1.w);
                     Vertex ac = new Vertex(v3.x - v1.x, v3.y - v1.y, v3.z - v1.z, v3.w - v1.w);
@@ -105,12 +138,12 @@ public class Renderer {
 
                     double angleCos = Math.abs(norm.z);
 
-                    v1.x = v1.x / (-v1.z) * fov;
-                    v1.y = v1.y / (-v1.z) * fov;
-                    v2.x = v2.x / (-v2.z) * fov;
-                    v2.y = v2.y / (-v2.z) * fov;
-                    v3.x = v3.x / (-v3.z) * fov;
-                    v3.y = v3.y / (-v3.z) * fov;
+                    v1.x = v1.x / (-v1.z) * fov * 2;
+                    v1.y = v1.y / (-v1.z) * fov * 2;
+                    v2.x = v2.x / (-v2.z) * fov * 2;
+                    v2.y = v2.y / (-v2.z) * fov * 2;
+                    v3.x = v3.x / (-v3.z) * fov * 2;
+                    v3.y = v3.y / (-v3.z) * fov * 2;
 
                     v1.x += viewportWidth / 2;
                     v1.y += viewportHeight / 2;
@@ -132,26 +165,22 @@ public class Renderer {
                         {
                             double b1 = ((y - v3.y) * (v2.x - v3.x) + (v2.y - v3.y) * (v3.x - x)) / triangleArea;
                             double b2 = ((y - v1.y) * (v3.x - v1.x) + (v3.y - v1.y) * (v1.x - x)) / triangleArea;
-                            double b3 = 1 - b1 - b2;
-
-                            //p = p0 + (p1 - p0) * s + (p2 - p0) * t
+                            double b3 = ((y - v2.y) * (v1.x - v2.x) + (v1.y - v2.y) * (v2.x - x)) / triangleArea;
 
                             if (b1 >= 0 && b1 <= 1 && b2 >= 0 && b2 <= 1 && b3 >= 0 && b3 <= 1)
                             {
                                 double depth = b1 * v1.z + b2 * v2.z + b3 * v3.z;
                                 int zIndex = y * img.getWidth() + x;
-                                if (zBuffer[zIndex] < depth)
-                                {
-                                    //img.setRGB(x, y, getShade(t.color, angleCos).getRGB());
-                                    //img.setRGB(x, y, shadeDepth(t.color, angleCos, depth).getRGB());
-                                    img.setRGB(x, y, interpolateColor(t.v1, t.v2, t.v3, x, y).getRGB());
+                                if (zBuffer[zIndex] < depth) {
+                                    img.setRGB(x, y, interpolateColor(tr.v1, tr.v2, tr.v3, x, y, img2).getRGB());
+                                    //img.setRGB(x, y, shadeAngle(tr.color, angleCos).getRGB());
+                                    //img.setRGB(x, y, shadeDepth(tr.color, angleCos, depth).getRGB());
                                     zBuffer[zIndex] = depth;
                                 }
                             }
                         }
                     }
                 }
-
                 g2.drawImage(img, 0, 0, null);
             }
         };
@@ -164,25 +193,21 @@ public class Renderer {
 
         frame.setSize(900, 900);
         frame.setVisible(true);
-
-        while(true)
-        {
-            //verticalSlider.setValue(verticalSlider.getValue() == 180? -180:verticalSlider.getValue() + 1);
-            try
-            {
-                Thread.sleep(50);
-            } catch (Exception e) {System.out.println(e);}
-            renderPanel.repaint();
-        }
     }
 
-    public static Color interpolateColor(Vertex p0, Vertex p1, Vertex p2, int xScreen, int yScreen)
-    {
+    public static Color interpolateColor(Vertex p0, Vertex p1, Vertex p2, int xScreen, int yScreen, BufferedImage img) {
+        int lw = 1024;
 
-        return new Color(1, 1, 1);
+        Color temp0 = new Color(img.getRGB(Math.max(1, Math.min((int) (lw * p0.u), 1023)), Math.max(1, Math.min((int) (lw * p0.v), 1023))));
+        Color temp1 = new Color(img.getRGB(Math.max(1, Math.min((int) (lw * p1.u), 1023)), Math.max(1, Math.min((int) (lw * p1.v), 1023))));
+        Color temp2 = new Color(img.getRGB(Math.max(1, Math.min((int) (lw * p2.u), 1023)), Math.max(1, Math.min((int) (lw * p2.v), 1023))));
+
+        Color output = new Color((temp0.getRed() + temp1.getRed() + temp2.getRed()) / 3, (temp0.getGreen() + temp1.getGreen() + temp2.getGreen()) / 3, (temp0.getBlue() + temp1.getBlue() + temp2.getBlue()) / 3);
+
+        return output;
     }
 
-    public static Color getShade(Color color, double shade)
+    private static Color shadeAngle(Color color, double shade)
     {
         double redLinear = Math.pow(color.getRed(), 2.4) * shade;
         double greenLinear = Math.pow(color.getGreen(), 2.4) * shade;
@@ -195,29 +220,30 @@ public class Renderer {
         return new Color(red, green, blue);
     }
 
-    private static Color shadeDepth(Color color, double shade, double depth) {
+    private static Color shadeDepth(Color color, double shade, double depth)
+    {
         //double high = -370;
         //double low = -411;
         double high = -395;
-        double low = -405;
-        double dfr = high - low;
+        double low = -403;
+        double dfr = high-low;
 
-        double cPrc = (Math.abs(depth - high)) / (dfr / 100);
-        int cVal = (int) (255 - (255 * (cPrc / 100)));
+        double cPrc = (Math.abs(depth - high))/(dfr/100);
+        int cVal = (int)(255-(255*(cPrc/100)));
 
         int red = Math.max(0, Math.min(255, cVal));
-        int green = red;
-        int blue = red;
+        int green = Math.max(0, Math.min(255, cVal));
+        int blue = Math.max(0, Math.min(255, cVal));
 
         double redLinear = Math.pow(color.getRed(), 2.4) * shade;
         double greenLinear = Math.pow(color.getGreen(), 2.4) * shade;
         double blueLinear = Math.pow(color.getBlue(), 2.4) * shade;
 
-        red += (int) Math.pow(redLinear, 1 / 2.4);
-        green += (int) Math.pow(greenLinear, 1 / 2.4);
-        blue += (int) Math.pow(blueLinear, 1 / 2.4);
+        red += (int) Math.pow(redLinear, 1/2.4);
+        green += (int) Math.pow(greenLinear, 1/2.4);
+        blue += (int) Math.pow(blueLinear, 1/2.4);
 
 
-        return new Color(red / 2, green / 2, blue / 2);
+        return new Color(red/2, green/2, blue/2);
     }
 }
